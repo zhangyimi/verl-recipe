@@ -145,6 +145,8 @@ PPO training requires multiple weight updates to vLLM. Native vLLM does not supp
 
 ## Experimental Results
 
+All experiments were conducted on B300.
+
 ### Experiment 1: Qwen3-8B-Base QAT Comparison
 
 Comparing W4A16 quantized training with and without QAT:
@@ -189,6 +191,22 @@ Validating QAT effectiveness on larger models. Results are consistent with the 8
 | W4A16 + QAT (FFN-only) | Red |
 
 <img src="./img/image4.png">
+
+**Memory Analysis**
+
+Analyzed memory impact of NVFP4 during Rollout phase for Qwen3-30B-A3B.
+
+Config: vLLM rollout settings with `gpu_memory_utilization=0.90`, `max_num_batched_tokens=32768`, `max_num_seqs=256`, `TP=1`.
+
+| Metric | BF16 | W4A16 + QAT (Full) | Change |
+|--------|------|---------------------|--------|
+| Weight | 56.88 GiB | 16.89 GiB | -39.99 GiB (↓70.3%) |
+| KV Cache | 181.26 GiB | 221.26 GiB | +40.00 GiB (↑22.1%) |
+| Peak Activation | 2.64 GiB | 2.64 GiB | - |
+| Non-torch Memory | 0.14 GiB | 0.14 GiB | - |
+| CUDAGraph Memory | -1.34 GiB | -1.16 GiB | +0.18 GiB |
+
+**Conclusion**: NVFP4 W4A16 reduces weight memory by **70.3%** (from 56.88 GiB to 16.89 GiB), freeing up ~40 GiB for additional KV Cache capacity.
 
 ---
 

@@ -81,7 +81,7 @@ export TORCH_DIST_TIMEOUT=4000
 
 RAY_ADDRESS='http://127.0.0.1:8265' ray job submit --runtime-env="${RUNTIME_ENV}" \
     --working-dir "${WORKING_DIR}" \
-    -- python3 -m recipe.trainer.main_ppo \
+    -- python3 -m verl.trainer.main_ppo \
     --config-path "${WORKING_DIR}/recipe/qat/config" \
     --config-name dapo_qat_trainer \
     data.train_files="${TRAIN_FILE}" \
