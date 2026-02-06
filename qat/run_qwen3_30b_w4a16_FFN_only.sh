@@ -133,7 +133,7 @@ RAY_ADDRESS='http://127.0.0.1:8265' ray job submit --runtime-env="${RUNTIME_ENV}
     actor_rollout_ref.actor.qat.enable=${qat_enable} \
     actor_rollout_ref.actor.qat.mode=${qat_mode} \
     actor_rollout_ref.actor.qat.quantization_config_path=${qat_config_path} \
-    'actor_rollout_ref.actor.qat.ignore_patterns=["lm_head", "embed_tokens", "re:.*mlp.gate$", "re:.*self_attn\..*"]' \
+    'actor_rollout_ref.actor.qat.ignore_patterns=["lm_head", "embed_tokens", "re:.*mlp.gate$", "re:.*self_attn.*"]' \
     actor_rollout_ref.rollout.tensor_model_parallel_size=${gen_tp} \
     actor_rollout_ref.rollout.enable_chunked_prefill=True \
     actor_rollout_ref.rollout.max_num_batched_tokens=$(( 1024 * 32 )) \

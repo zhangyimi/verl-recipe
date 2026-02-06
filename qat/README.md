@@ -75,7 +75,7 @@ actor_rollout_ref:
         - "lm_head"
         - "embed_tokens"
         - "re:.*mlp.gate$"
-        - "re:.*self_attn\..*" 
+        - "re:.*self_attn.*"
       quantization_config_path: "recipe/qat/config/nvfp4_w4a16.json"
 ```
 
