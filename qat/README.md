@@ -122,10 +122,7 @@ Fusion is implemented via `_fusion_siblings_ref` weak references, automatically 
 
 ### vLLM Dynamic Weight Loading Patches
 
-PPO training requires multiple weight updates to vLLM. Native vLLM does not support repeated loading of quantized weights. The patches address:
-
-1. **Dense layers**: Create Marlin-format compute parameters, support repeated loading
-2. **MoE layers**: Preserve original scale format, support repeated `load_weights` → `process_weights_after_loading`
+PPO training requires multiple weight updates to vLLM. Native vLLM does not support repeated loading of quantized weights.
 
 ### Data Flow
 
