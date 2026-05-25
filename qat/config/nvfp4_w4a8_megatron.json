@@ -1,0 +1,29 @@
+{
+    "quant_method": "modelopt",
+    "config_groups": {
+        "group_0": {
+            "input_activations": {
+                "dynamic": true,
+                "num_bits": 8,
+                "type": "float",
+                "group_size": null
+            },
+            "weights": {
+                "dynamic": false,
+                "num_bits": 4,
+                "type": "float",
+                "group_size": 16
+            },
+            "targets": [
+                "Linear"
+            ]
+        }
+    },
+    "ignore": [
+        "lm_head"
+    ],
+    "quant_algo": "W4A8_NVFP4_FP8",
+    "producer": {
+        "name": "modelopt"
+    }
+}
