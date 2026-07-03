@@ -68,6 +68,25 @@ class RayDAPOTrainer(RayPPOTrainer):
                 "perf/mfu/actor_infer": old_log_prob_mfu,
             }
             metrics.update(old_log_prob_metrics)
+            metrics.update(getattr(self, "_last_route_diag_metrics", {}))
+
+            if os.environ.get("VERL_ROUTE_REPLAY_COUNTERFACTUAL", "0") == "1":
+                if "routed_experts" not in batch.batch or "rollout_log_probs" not in batch.batch:
+                    raise RuntimeError(
+                        "route replay counterfactual requires routed_experts and rollout_log_probs in the batch"
+                    )
+                forced_log_prob, _ = self._compute_old_log_prob(batch, force_rollout_routes=True)
+                from verl.utils.route_diagnostics import route_replay_counterfactual_metrics
+
+                metrics.update(
+                    route_replay_counterfactual_metrics(
+                        rollout_log_probs=batch.batch["rollout_log_probs"],
+                        natural_log_probs=old_log_prob.batch["old_log_probs"],
+                        replay_log_probs=forced_log_prob.batch["old_log_probs"],
+                        response_mask=batch.batch["response_mask"],
+                    )
+                )
+                forced_log_prob.batch.pop("entropys")
             old_log_prob.batch.pop("entropys")
             batch = batch.union(old_log_prob)
 
@@ -95,6 +114,8 @@ class RayDAPOTrainer(RayPPOTrainer):
             experiment_name=self.config.trainer.experiment_name,
             default_backend=self.config.trainer.logger,
             config=OmegaConf.to_container(self.config, resolve=True),
+            wandb_run_id=self.config.trainer.get("wandb_run_id", None),
+            wandb_resume=self.config.trainer.get("wandb_resume", None),
         )
 
         self.global_steps = 0
@@ -140,6 +161,8 @@ class RayDAPOTrainer(RayPPOTrainer):
         num_prompt_in_batch = 0
         num_gen_batches = 0
         current_epoch = self.global_steps // len(self.train_dataloader)
+        if os.environ.get("VERL_ROUTE_DIAG_ONLY", "0") == "1":
+            current_epoch = 0
 
         for epoch in range(current_epoch, self.config.trainer.total_epochs):
             for batch_dict in self.train_dataloader:
@@ -315,6 +338,39 @@ class RayDAPOTrainer(RayPPOTrainer):
                     if not self.config.algorithm.use_kl_in_reward:
                         batch = self.compute_kl_related_metrics(batch, metrics, timing_raw)
 
+                    # Dedicated route probe: one rollout plus one FSDP old-logprob
+                    # forward is the complete experiment.  Do not update or save.
+                    if os.environ.get("VERL_ROUTE_DIAG_ONLY", "0") == "1":
+                        response_route_tokens = metrics.get("route_diag/response_token_count", 0.0)
+                        prompt_route_tokens = metrics.get("route_diag/prompt/token_count", 0.0)
+                        if response_route_tokens <= 0 or prompt_route_tokens <= 0:
+                            raise RuntimeError(
+                                "route diagnostic produced no valid rollout routes: "
+                                f"prompt={prompt_route_tokens}, response={response_route_tokens}"
+                            )
+                        metrics.update(
+                            {
+                                "training/global_step": self.global_steps,
+                                "route_diag/checkpoint_step": float(self.global_steps - 1),
+                            }
+                        )
+                        logger.log(data=metrics, step=self.global_steps)
+                        summary = {
+                            key: value
+                            for key, value in metrics.items()
+                            if key in {
+                                "route_diag/set_overlap_mean",
+                                "route_diag/exact_match_mean",
+                                "route_diag/token_any_flip_fraction",
+                                "route_diag/response_token_count",
+                                "route_replay_cf/natural/logprob_abs/mean",
+                                "route_replay_cf/replay/logprob_abs/mean",
+                                "route_replay_cf/logprob_abs_mean_recovery",
+                            }
+                        }
+                        print(f"[route-diag] completed without actor update: {summary}", flush=True)
+                        return
+
                     # compute values
                     if self.use_critic:
                         with marked_timer("values", timing_raw, "cyan"):
@@ -329,6 +385,14 @@ class RayDAPOTrainer(RayPPOTrainer):
                         batch, is_metrics = compute_rollout_correction_and_add_to_batch(batch, rollout_corr_config)
                         # IS and off-policy metrics already have rollout_corr/ prefix
                         metrics.update(is_metrics)
+                        token_gap = is_metrics.get("rollout_corr/logprob_abs_diff")
+                        if token_gap is None:
+                            raise RuntimeError(
+                                "token-level rollout correction did not emit "
+                                "rollout_corr/logprob_abs_diff"
+                            )
+                        # Exact cross-framework alias used by the Slime runs.
+                        metrics["train/train_rollout_logprob_abs_diff"] = token_gap
 
                     with marked_timer("adv", timing_raw, "brown"):
                         # compute advantages, executed on the driver process
@@ -342,6 +406,7 @@ class RayDAPOTrainer(RayPPOTrainer):
                             norm_adv_by_std_in_grpo=norm_adv_by_std_in_grpo,
                             config=self.config.algorithm,
                         )
+                        batch = self._apply_driver_adv_length_norm(batch, metrics)
 
                     # update critic
                     if self.use_critic:
