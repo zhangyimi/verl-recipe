@@ -2,7 +2,9 @@
 
 This module provides **NVFP4 W4A16 Quantization-Aware Training (QAT)**, enabling seamless integration between FSDP distributed training and vLLM inference engine. This allows **NVFP4 quantized** inference during training without causing KL divergence explosion.
 
-**Dependency**: Requires `vllm==0.15.0`.
+**Dependency**: the original FSDP recipe below targets `vllm==0.15.0`.
+The Megatron MoE scripts added on branch `share/megatron-moe-nvfp4-v020`
+target the vLLM 0.20 API and must be used with the matching veRL branch.
 
 ---
 
